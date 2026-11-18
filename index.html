@@ -1,0 +1,1660 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Inventario v2.0 - Ref: 13/11</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js + DataLabels Plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SheetJS para exportar Excel (.xlsx) real -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* Sticky table header */
+        .table-container {
+            max-height: 68vh;
+            overflow-y: auto;
+        }
+        thead th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background-color: #f8fafc;
+            box-shadow: inset 0 -1px 0 #e2e8f0;
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <!-- Brand & Status -->
+                <div class="flex items-center gap-3">
+                    <div class="bg-slate-900 text-white p-2.5 rounded-xl shadow-xs">
+                        <i data-lucide="car" class="w-6 h-6 text-amber-400"></i>
+                    </div>
+                    <div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h1 class="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">Control de Inventario</h1>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                Corte 13/11
+                            </span>
+                            <span id="autosave-status" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                Guardado
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-0.5">Renault Chacao • Volkswagen • Usados & Consignados</p>
+                    </div>
+                </div>
+
+                <!-- Unified Action Buttons -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <!-- Dropdown Exportar / Respaldo -->
+                    <div class="relative" id="export-dropdown-wrapper">
+                        <button onclick="toggleExportMenu()" class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors shadow-2xs">
+                            <i data-lucide="folder-down" class="w-4 h-4 text-slate-600"></i>
+                            <span>Exportar / Respaldo</span>
+                            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+                        </button>
+                        <div id="export-menu" class="hidden absolute right-0 mt-2 w-60 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-40">
+                            <div class="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Descargar Reporte</div>
+                            <button onclick="exportToExcel(); closeExportMenu();" class="w-full px-3.5 py-2 text-left text-sm text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2.5 transition-colors">
+                                <i data-lucide="file-spreadsheet" class="w-4 h-4 text-emerald-600"></i>
+                                <div>
+                                    <div class="font-semibold">Excel (.xlsx)</div>
+                                    <div class="text-[11px] text-slate-400">3 hojas: Detalle, Resumen y Ubicación</div>
+                                </div>
+                            </button>
+                            <button onclick="exportToCSV(); closeExportMenu();" class="w-full px-3.5 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors">
+                                <i data-lucide="file-text" class="w-4 h-4 text-slate-500"></i>
+                                <div>
+                                    <div class="font-medium">Archivo CSV</div>
+                                    <div class="text-[11px] text-slate-400">Tabla plana compatible con cualquier sistema</div>
+                                </div>
+                            </button>
+                            <div class="my-1 border-t border-slate-100"></div>
+                            <div class="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Copia de Seguridad</div>
+                            <button onclick="exportBackupJSON(); closeExportMenu();" class="w-full px-3.5 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors">
+                                <i data-lucide="save" class="w-4 h-4 text-blue-600"></i>
+                                <span>Guardar respaldo (.json)</span>
+                            </button>
+                            <button onclick="document.getElementById('import-json-input').click(); closeExportMenu();" class="w-full px-3.5 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors">
+                                <i data-lucide="upload" class="w-4 h-4 text-indigo-600"></i>
+                                <span>Cargar respaldo (.json)</span>
+                            </button>
+                            <div class="my-1 border-t border-slate-100"></div>
+                            <button onclick="openRestoreModal(); closeExportMenu();" class="w-full px-3.5 py-2 text-left text-sm text-amber-700 hover:bg-amber-50 flex items-center gap-2.5 transition-colors">
+                                <i data-lucide="rotate-ccw" class="w-4 h-4 text-amber-600"></i>
+                                <span>Restaurar corte 13/11</span>
+                            </button>
+                        </div>
+                        <input type="file" id="import-json-input" accept=".json" class="hidden" onchange="importBackupJSON(event)">
+                    </div>
+
+                    <!-- Primary Action -->
+                    <button onclick="openVehicleModal()" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-slate-900 rounded-xl hover:bg-slate-800 transition-all shadow-xs">
+                        <i data-lucide="plus" class="w-4 h-4 text-amber-400"></i>
+                        <span>Agregar Vehículo</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Interactive KPI Cards Grid (Click to filter) -->
+        <section>
+            <div class="flex items-center justify-between mb-2.5">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <i data-lucide="mouse-pointer-click" class="w-3.5 h-3.5"></i>
+                    Haz clic en una tarjeta para filtrar el inventario
+                </span>
+                <span id="active-kpi-indicator" class="hidden text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
+                    Filtro rápido activo
+                </span>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+                <!-- Total (Reset Category Filter) -->
+                <button type="button" onclick="toggleKpiFilter('')" id="kpi-card-ALL" class="kpi-card text-left bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs hover:border-slate-400 transition-all flex flex-col justify-between cursor-pointer">
+                    <div class="flex items-center justify-between text-slate-500 mb-2">
+                        <span class="text-[11px] font-bold uppercase tracking-wider">Total Flota</span>
+                        <div class="p-1.5 bg-slate-100 rounded-lg">
+                            <i data-lucide="layers" class="w-4 h-4 text-slate-700"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <div id="kpi-total" class="text-2xl sm:text-3xl font-bold text-slate-900">0</div>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Ver todas las unidades</p>
+                    </div>
+                </button>
+
+                <!-- Nuevos Renault -->
+                <button type="button" onclick="toggleKpiFilter('Nuevos Renault')" id="kpi-card-Nuevos Renault" class="kpi-card text-left bg-white p-3.5 rounded-2xl border border-amber-200/90 shadow-2xs hover:border-amber-400 transition-all flex flex-col justify-between relative overflow-hidden cursor-pointer">
+                    <div class="absolute top-0 right-0 w-14 h-14 bg-amber-50 rounded-bl-full -z-0"></div>
+                    <div class="flex items-center justify-between text-amber-700 mb-2 relative z-10">
+                        <span class="text-[11px] font-bold uppercase tracking-wider">Nuevos RNLT</span>
+                        <div class="p-1.5 bg-amber-100 rounded-lg">
+                            <i data-lucide="sparkles" class="w-4 h-4 text-amber-600"></i>
+                        </div>
+                    </div>
+                    <div class="relative z-10">
+                        <div id="kpi-renault" class="text-2xl sm:text-3xl font-bold text-slate-900">0</div>
+                        <p id="kpi-renault-pct" class="text-[11px] text-amber-600 font-medium mt-0.5">0% del total</p>
+                    </div>
+                </button>
+
+                <!-- Nuevos VW -->
+                <button type="button" onclick="toggleKpiFilter('Nuevos Volkswagen')" id="kpi-card-Nuevos Volkswagen" class="kpi-card text-left bg-white p-3.5 rounded-2xl border border-blue-200/90 shadow-2xs hover:border-blue-400 transition-all flex flex-col justify-between relative overflow-hidden cursor-pointer">
+                    <div class="absolute top-0 right-0 w-14 h-14 bg-blue-50 rounded-bl-full -z-0"></div>
+                    <div class="flex items-center justify-between text-blue-700 mb-2 relative z-10">
+                        <span class="text-[11px] font-bold uppercase tracking-wider">Nuevos VW</span>
+                        <div class="p-1.5 bg-blue-100 rounded-lg">
+                            <i data-lucide="shield-check" class="w-4 h-4 text-blue-600"></i>
+                        </div>
+                    </div>
+                    <div class="relative z-10">
+                        <div id="kpi-vw" class="text-2xl sm:text-3xl font-bold text-slate-900">0</div>
+                        <p id="kpi-vw-pct" class="text-[11px] text-blue-600 font-medium mt-0.5">0% del total</p>
+                    </div>
+                </button>
+
+                <!-- Usados -->
+                <button type="button" onclick="toggleKpiFilter('Usados')" id="kpi-card-Usados" class="kpi-card text-left bg-white p-3.5 rounded-2xl border border-purple-200/90 shadow-2xs hover:border-purple-400 transition-all flex flex-col justify-between relative overflow-hidden cursor-pointer">
+                    <div class="absolute top-0 right-0 w-14 h-14 bg-purple-50 rounded-bl-full -z-0"></div>
+                    <div class="flex items-center justify-between text-purple-700 mb-2 relative z-10">
+                        <span class="text-[11px] font-bold uppercase tracking-wider">Usados</span>
+                        <div class="p-1.5 bg-purple-100 rounded-lg">
+                            <i data-lucide="refresh-cw" class="w-4 h-4 text-purple-600"></i>
+                        </div>
+                    </div>
+                    <div class="relative z-10">
+                        <div id="kpi-usados" class="text-2xl sm:text-3xl font-bold text-slate-900">0</div>
+                        <p id="kpi-usados-pct" class="text-[11px] text-purple-600 font-medium mt-0.5">0% del total</p>
+                    </div>
+                </button>
+
+                <!-- Consignados -->
+                <button type="button" onclick="toggleKpiFilter('Consignados')" id="kpi-card-Consignados" class="kpi-card text-left bg-white p-3.5 rounded-2xl border border-emerald-200/90 shadow-2xs hover:border-emerald-400 transition-all flex flex-col justify-between relative overflow-hidden cursor-pointer">
+                    <div class="absolute top-0 right-0 w-14 h-14 bg-emerald-50 rounded-bl-full -z-0"></div>
+                    <div class="flex items-center justify-between text-emerald-700 mb-2 relative z-10">
+                        <span class="text-[11px] font-bold uppercase tracking-wider">Consignados</span>
+                        <div class="p-1.5 bg-emerald-100 rounded-lg">
+                            <i data-lucide="file-signature" class="w-4 h-4 text-emerald-600"></i>
+                        </div>
+                    </div>
+                    <div class="relative z-10">
+                        <div id="kpi-consignados" class="text-2xl sm:text-3xl font-bold text-slate-900">0</div>
+                        <p id="kpi-consignados-pct" class="text-[11px] text-emerald-600 font-medium mt-0.5">0% del total</p>
+                    </div>
+                </button>
+
+                <!-- Por Facturar -->
+                <button type="button" onclick="toggleKpiFilter('Por Facturar')" id="kpi-card-Por Facturar" class="kpi-card text-left bg-white p-3.5 rounded-2xl border border-rose-200/90 shadow-2xs hover:border-rose-400 transition-all flex flex-col justify-between relative overflow-hidden cursor-pointer">
+                    <div class="absolute top-0 right-0 w-14 h-14 bg-rose-50 rounded-bl-full -z-0"></div>
+                    <div class="flex items-center justify-between text-rose-700 mb-2 relative z-10">
+                        <span class="text-[11px] font-bold uppercase tracking-wider">Por Facturar</span>
+                        <div class="p-1.5 bg-rose-100 rounded-lg">
+                            <i data-lucide="receipt" class="w-4 h-4 text-rose-600"></i>
+                        </div>
+                    </div>
+                    <div class="relative z-10">
+                        <div id="kpi-facturar" class="text-2xl sm:text-3xl font-bold text-slate-900">0</div>
+                        <p id="kpi-facturar-pct" class="text-[11px] text-rose-600 font-medium mt-0.5">0% del total</p>
+                    </div>
+                </button>
+
+                <!-- Transmisión MT vs CVT -->
+                <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col justify-between col-span-2 sm:col-span-1">
+                    <div class="flex items-center justify-between text-slate-500 mb-2">
+                        <span class="text-[11px] font-bold uppercase tracking-wider">Caja</span>
+                        <div class="p-1.5 bg-slate-100 rounded-lg">
+                            <i data-lucide="settings-2" class="w-4 h-4 text-slate-700"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex items-baseline gap-1.5">
+                            <button type="button" onclick="toggleTransFilter('MT')" class="hover:underline cursor-pointer">
+                                <span id="kpi-mt" class="text-xl font-bold text-slate-900">0</span>
+                                <span class="text-[11px] font-semibold text-slate-500">MT</span>
+                            </button>
+                            <span class="text-slate-300">|</span>
+                            <button type="button" onclick="toggleTransFilter('CVT')" class="hover:underline cursor-pointer">
+                                <span id="kpi-cvt" class="text-xl font-bold text-slate-900">0</span>
+                                <span class="text-[11px] font-semibold text-slate-500">CVT</span>
+                            </button>
+                        </div>
+                        <p id="kpi-na" class="text-[11px] text-slate-400 mt-1">0 sin especificar</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Charts Section (Collapsible for more table space) -->
+        <section class="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+            <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="bar-chart-3" class="w-4 h-4 text-slate-500"></i>
+                    <h2 class="text-sm font-bold text-slate-800">Resumen Visual de Flota</h2>
+                </div>
+                <button onclick="toggleChartsVisibility()" id="toggle-charts-btn" class="text-xs font-medium text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 transition-colors">
+                    <span id="toggle-charts-text">Ocultar gráficos</span>
+                    <i id="toggle-charts-icon" data-lucide="chevron-up" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div id="charts-grid" class="p-5 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Chart 1: Por Categoría -->
+                <div class="flex flex-col">
+                    <div class="mb-3">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Por Categoría</h3>
+                        <p class="text-[11px] text-slate-400">Distribución general</p>
+                    </div>
+                    <div class="relative h-52 w-full flex items-center justify-center">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 2: Por Modelo -->
+                <div class="flex flex-col">
+                    <div class="mb-3">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Por Modelo</h3>
+                        <p class="text-[11px] text-slate-400">Unidades disponibles</p>
+                    </div>
+                    <div class="relative h-52 w-full">
+                        <canvas id="modelChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 3: Por Ubicación / Estado -->
+                <div class="flex flex-col">
+                    <div class="mb-3">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Por Ubicación / Estado</h3>
+                        <p class="text-[11px] text-slate-400">Patios, vitrinas y asignaciones</p>
+                    </div>
+                    <div class="relative h-52 w-full">
+                        <canvas id="locationChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Filters & Table Section -->
+        <section class="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+            <!-- Filter Bar -->
+            <div class="p-5 border-b border-slate-200 space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-900">Listado Detallado de Unidades</h2>
+                        <p class="text-xs text-slate-500">Mostrando <span id="showing-count" class="font-semibold text-slate-800">0</span> de <span id="total-count" class="font-semibold text-slate-800">0</span> vehículos registrados</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button id="clear-filters-btn" onclick="resetFilters()" class="hidden text-xs font-semibold text-blue-600 hover:text-blue-800 items-center gap-1 bg-blue-50 px-2.5 py-1 rounded-lg">
+                            <i data-lucide="x-circle" class="w-3.5 h-3.5"></i>
+                            Limpiar filtros
+                        </button>
+                        <!-- Density toggle -->
+                        <div class="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs">
+                            <button type="button" onclick="setTableDensity('normal')" id="density-normal" class="px-2.5 py-1 rounded-md font-medium bg-white text-slate-800 shadow-2xs transition-all">Cómoda</button>
+                            <button type="button" onclick="setTableDensity('compact')" id="density-compact" class="px-2.5 py-1 rounded-md font-medium text-slate-500 hover:text-slate-800 transition-all">Compacta</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    <!-- Search Input -->
+                    <div class="lg:col-span-2 relative">
+                        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                        <input type="text" id="search-input" placeholder="Buscar por placa, VIN, modelo, cliente o ubicación..." 
+                               class="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 transition-all">
+                    </div>
+
+                    <!-- Filter Category -->
+                    <div>
+                        <select id="filter-category" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400">
+                            <option value="">Todas las Categorías</option>
+                            <option value="Nuevos Renault">Nuevos Renault</option>
+                            <option value="Nuevos Volkswagen">Nuevos Volkswagen</option>
+                            <option value="Usados">Usados</option>
+                            <option value="Consignados">Consignados</option>
+                            <option value="Por Facturar">Por Facturar</option>
+                        </select>
+                    </div>
+
+                    <!-- Filter Brand & Transmission -->
+                    <div class="grid grid-cols-2 gap-2">
+                        <select id="filter-brand" class="w-full px-2.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400">
+                            <option value="">Marca</option>
+                            <option value="Renault">Renault</option>
+                            <option value="Volkswagen">Volkswagen</option>
+                        </select>
+                        <select id="filter-transmission" class="w-full px-2.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400">
+                            <option value="">Caja</option>
+                            <option value="MT">MT</option>
+                            <option value="CVT">CVT</option>
+                            <option value="N/A">N/A</option>
+                        </select>
+                    </div>
+
+                    <!-- Filter Location -->
+                    <div>
+                        <select id="filter-location" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400">
+                            <option value="">Todas las Ubicaciones</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Responsive Table with Sticky Header -->
+            <div class="overflow-x-auto table-container">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="text-xs font-semibold text-slate-500 uppercase tracking-wider select-none">
+                            <th onclick="sortBy('category')" class="py-3.5 px-4 cursor-pointer hover:text-slate-900 transition-colors">
+                                <div class="inline-flex items-center gap-1">Categoría <span id="sort-icon-category" class="text-slate-400">↕</span></div>
+                            </th>
+                            <th onclick="sortBy('model')" class="py-3.5 px-4 cursor-pointer hover:text-slate-900 transition-colors">
+                                <div class="inline-flex items-center gap-1">Vehículo / Modelo <span id="sort-icon-model" class="text-slate-400">↕</span></div>
+                            </th>
+                            <th onclick="sortBy('color')" class="py-3.5 px-4 cursor-pointer hover:text-slate-900 transition-colors">
+                                <div class="inline-flex items-center gap-1">Color <span id="sort-icon-color" class="text-slate-400">↕</span></div>
+                            </th>
+                            <th onclick="sortBy('transmission')" class="py-3.5 px-4 cursor-pointer hover:text-slate-900 transition-colors">
+                                <div class="inline-flex items-center gap-1">Caja <span id="sort-icon-transmission" class="text-slate-400">↕</span></div>
+                            </th>
+                            <th onclick="sortBy('plate')" class="py-3.5 px-4 cursor-pointer hover:text-slate-900 transition-colors">
+                                <div class="inline-flex items-center gap-1">Placa / VIN <span id="sort-icon-plate" class="text-slate-400">↕</span></div>
+                            </th>
+                            <th onclick="sortBy('location')" class="py-3.5 px-4 cursor-pointer hover:text-slate-900 transition-colors">
+                                <div class="inline-flex items-center gap-1">Ubicación rápida <span id="sort-icon-location" class="text-slate-400">↕</span></div>
+                            </th>
+                            <th class="py-3.5 px-4">Detalles / Cliente</th>
+                            <th class="py-3.5 px-4 text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-tbody" class="divide-y divide-slate-100 text-sm">
+                        <!-- Rows populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Empty State -->
+            <div id="empty-state" class="hidden py-12 px-4 text-center">
+                <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 text-slate-400 mb-3">
+                    <i data-lucide="search-x" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-sm font-semibold text-slate-900">No se encontraron vehículos</h3>
+                <p class="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Intenta ajustar los filtros de búsqueda o agrega una nueva unidad al inventario.</p>
+                <button onclick="resetFilters()" class="mt-4 inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-700 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">
+                    Limpiar filtros
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Add / Edit Vehicle Modal -->
+    <div id="vehicle-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-end sm:items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity" onclick="closeVehicleModal()"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+            <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl w-full border border-slate-200">
+                <div class="bg-white px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                    <div class="flex items-center gap-2.5">
+                        <div class="p-2 bg-slate-100 rounded-xl">
+                            <i data-lucide="car-front" class="w-5 h-5 text-slate-800"></i>
+                        </div>
+                        <h3 id="modal-title" class="text-lg font-bold text-slate-900">Agregar Nuevo Vehículo</h3>
+                    </div>
+                    <button onclick="closeVehicleModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <form id="vehicle-form" onsubmit="handleFormSubmit(event)" class="p-6 space-y-4">
+                    <input type="hidden" id="vehicle-id">
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <!-- Categoría -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Categoría *</label>
+                            <select id="form-category" required class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500">
+                                <option value="Nuevos Renault">Nuevos Renault</option>
+                                <option value="Nuevos Volkswagen">Nuevos Volkswagen</option>
+                                <option value="Usados">Usados</option>
+                                <option value="Consignados">Consignados</option>
+                                <option value="Por Facturar">Por Facturar</option>
+                            </select>
+                        </div>
+
+                        <!-- Marca -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Marca *</label>
+                            <input type="text" id="form-brand" required list="brand-suggestions" placeholder="Ej. Renault, Volkswagen" 
+                                   class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500">
+                            <datalist id="brand-suggestions">
+                                <option value="Renault">
+                                <option value="Volkswagen">
+                            </datalist>
+                        </div>
+
+                        <!-- Modelo -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Modelo *</label>
+                            <input type="text" id="form-model" required list="model-suggestions" placeholder="Ej. Logan, Stepway, T-Cross" 
+                                   class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500">
+                            <datalist id="model-suggestions">
+                                <option value="Logan">
+                                <option value="Stepway">
+                                <option value="Kangoo">
+                                <option value="Kardian">
+                                <option value="Oroch">
+                                <option value="Duster">
+                                <option value="Kwid">
+                                <option value="Tera">
+                                <option value="T-Cross">
+                                <option value="Virtus">
+                            </datalist>
+                        </div>
+
+                        <!-- Color -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Color</label>
+                            <input type="text" id="form-color" list="color-suggestions" placeholder="Ej. Gris Cassiope, Blanco, Rojo Fuego" 
+                                   class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500">
+                            <datalist id="color-suggestions">
+                                <option value="Gris Cassiope">
+                                <option value="Gris Estrella">
+                                <option value="Rojo Fuego">
+                                <option value="Rojo">
+                                <option value="Blanco">
+                                <option value="Negro">
+                                <option value="Plata">
+                                <option value="Plata Lunar">
+                                <option value="Gris Plata">
+                                <option value="Gris Topacio">
+                                <option value="Beis">
+                            </datalist>
+                        </div>
+
+                        <!-- Transmisión -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Transmisión</label>
+                            <select id="form-transmission" class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500">
+                                <option value="MT">MT (Manual)</option>
+                                <option value="CVT">CVT (Automática)</option>
+                                <option value="N/A">N/A (Sin especificar)</option>
+                            </select>
+                        </div>
+
+                        <!-- Ubicación / Estado -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Ubicación / Estado *</label>
+                            <input type="text" id="form-location" required list="location-suggestions" placeholder="Ej. Volgan, Papelillo, Showroom" 
+                                   class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500">
+                            <datalist id="location-suggestions">
+                                <option value="Volgan">
+                                <option value="Papelillo">
+                                <option value="Planta">
+                                <option value="Estacionamiento">
+                                <option value="Showroom">
+                                <option value="San Ignacio">
+                                <option value="XiRO">
+                                <option value="Latonería">
+                                <option value="Préstamo">
+                                <option value="Demo">
+                                <option value="Asignado">
+                                <option value="Kalinago">
+                            </datalist>
+                        </div>
+
+                        <!-- Placa -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Placa</label>
+                            <input type="text" id="form-plate" placeholder="Ej. AO709XB (dejar vacío si no tiene)" 
+                                   class="w-full px-3 py-2 text-sm font-mono uppercase bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500">
+                        </div>
+
+                        <!-- VIN -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">VIN / Serial</label>
+                            <input type="text" id="form-vin" placeholder="Ej. 9FB4SR0E6TM621058" 
+                                   class="w-full px-3 py-2 text-sm font-mono uppercase bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500">
+                        </div>
+
+                        <!-- Kilometraje -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Kilometraje (Km)</label>
+                            <input type="text" id="form-km" placeholder="Ej. 9533 (dejar vacío si es nuevo)" 
+                                   class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500">
+                        </div>
+
+                        <!-- Cliente / Asignación -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Cliente / Asignación</label>
+                            <input type="text" id="form-client" placeholder="Ej. Max, Brayan Vielma, Préstamo" 
+                                   class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500">
+                        </div>
+                    </div>
+
+                    <!-- Notas -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Notas adicionales</label>
+                        <textarea id="form-notes" rows="2" placeholder="Observaciones relevantes sobre el vehículo..." 
+                                  class="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-500"></textarea>
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
+                        <button type="button" onclick="closeVehicleModal()" class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors">
+                            Cancelar
+                        </button>
+                        <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-slate-900 rounded-xl hover:bg-slate-800 transition-colors shadow-xs">
+                            Guardar Vehículo
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal (Delete / Restore) -->
+    <div id="confirm-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" role="dialog" aria-modal="true">
+        <div class="flex items-end sm:items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity" onclick="closeConfirmModal()"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md w-full border border-slate-200 p-6">
+                <div class="flex items-start gap-4">
+                    <div id="confirm-icon-bg" class="p-3 rounded-full bg-red-100 text-red-600 shrink-0">
+                        <i id="confirm-icon" data-lucide="alert-triangle" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h3 id="confirm-title" class="text-base font-bold text-slate-900">Confirmar acción</h3>
+                        <p id="confirm-message" class="text-sm text-slate-500 mt-1">¿Estás seguro de realizar esta acción?</p>
+                    </div>
+                </div>
+                <div class="mt-6 flex items-center justify-end gap-2.5">
+                    <button type="button" onclick="closeConfirmModal()" class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors">
+                        Cancelar
+                    </button>
+                    <button id="confirm-action-btn" type="button" class="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-xl hover:bg-red-700 transition-colors shadow-xs">
+                        Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+        <div class="bg-slate-900 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-2.5 text-sm font-medium border border-slate-700">
+            <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
+            <span id="toast-message">Operación exitosa</span>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. INITIAL DATA (39 VEHICLES - REF 13/11)
+        // ==========================================
+        const STORAGE_KEY = 'vehicle_inventory_13_11_v2';
+
+        const STANDARD_LOCATIONS = [
+            'Volgan', 'Papelillo', 'Planta', 'Estacionamiento', 'Showroom',
+            'San Ignacio', 'XiRO', 'Latonería', 'Préstamo', 'Demo',
+            'Asignado', 'Kalinago', 'En casa 27/21', 'Prototipo Patrulla', 'Sin especificar'
+        ];
+
+        const INITIAL_INVENTORY = [
+            // CATEGORÍA: Nuevos Renault (14 vehículos)
+            { id: 'v-1', category: 'Nuevos Renault', brand: 'Renault', model: 'Logan', color: 'Gris Cassiope', transmission: 'MT', plate: 'AO709XB', vin: '9FB4SR0E6TM621058', location: 'Volgan', km: '', client: '', notes: 'Renault Chacao (13/11)' },
+            { id: 'v-2', category: 'Nuevos Renault', brand: 'Renault', model: 'Logan', color: 'Rojo Fuego', transmission: 'MT', plate: 'AO719XB', vin: '9FB4SR0E1TM579169', location: 'Volgan', km: '', client: '', notes: 'Renault Chacao (13/11)' },
+            { id: 'v-3', category: 'Nuevos Renault', brand: 'Renault', model: 'Logan', color: 'Gris Estrella', transmission: 'MT', plate: 'AO707XB', vin: '9FB4SR0E9TM621071', location: 'Volgan', km: '', client: '', notes: 'Renault Chacao (13/11)' },
+            { id: 'v-4', category: 'Nuevos Renault', brand: 'Renault', model: 'Logan', color: 'Gris Cassiope', transmission: 'MT', plate: 'AO706XB', vin: '9FB4SR0EXTM621063', location: 'Volgan', km: '', client: '', notes: 'Renault Chacao (13/11)' },
+            { id: 'v-5', category: 'Nuevos Renault', brand: 'Renault', model: 'Logan', color: 'Rojo Fuego', transmission: 'MT', plate: 'AO691XB', vin: '9FB4SR0E1TM621047', location: 'Volgan', km: '', client: '', notes: 'Renault Chacao (13/11)' },
+            { id: 'v-6', category: 'Nuevos Renault', brand: 'Renault', model: 'Kangoo', color: 'Blanco', transmission: 'MT', plate: 'A67DU4M', vin: '3322', location: 'Volgan', km: '', client: '', notes: 'Renault Chacao (13/11)' },
+            { id: 'v-7', category: 'Nuevos Renault', brand: 'Renault', model: 'Kangoo', color: 'Blanco', transmission: 'MT', plate: 'A67DU5M', vin: '3295', location: 'Volgan', km: '', client: '', notes: 'Renault Chacao (13/11)' },
+            { id: 'v-8', category: 'Nuevos Renault', brand: 'Renault', model: 'Kangoo', color: 'Blanco', transmission: 'MT', plate: 'A42DU6M', vin: '3318', location: 'Sin especificar', km: '', client: '', notes: 'Renault Chacao (13/11)' },
+            { id: 'v-9', category: 'Nuevos Renault', brand: 'Renault', model: 'Kangoo', color: 'Blanco', transmission: 'MT', plate: 'A67DU0M', vin: '3313', location: 'Sin especificar', km: '', client: '', notes: 'Renault Chacao (13/11)' },
+            { id: 'v-10', category: 'Nuevos Renault', brand: 'Renault', model: 'Kardian', color: 'Gris Cassiope', transmission: 'MT', plate: 'AP284GB', vin: '93YRJF001TJ617932', location: 'Estacionamiento', km: '', client: '', notes: 'Renault Chacao (13/11)' },
+            { id: 'v-11', category: 'Nuevos Renault', brand: 'Renault', model: 'Kardian', color: 'Negro', transmission: 'MT', plate: 'AP283GB', vin: '93YRJF003TJ617933', location: 'Showroom', km: '', client: '', notes: 'Renault Chacao (13/11)' },
+            { id: 'v-12', category: 'Nuevos Renault', brand: 'Renault', model: 'Oroch', color: 'Gris Topacio', transmission: 'CVT', plate: 'A89EC0M', vin: '93Y9S2ZV8TJ660524', location: 'Estacionamiento', km: '', client: '', notes: 'Renault Chacao (13/11)' },
+            { id: 'v-13', category: 'Nuevos Renault', brand: 'Renault', model: 'Duster', color: 'Gris Estrella', transmission: 'N/A', plate: 'AP226HB', vin: '9FBHJD404VM722964', location: 'Volgan', km: '', client: '', notes: 'Renault Chacao (13/11)' },
+            { id: 'v-14', category: 'Nuevos Renault', brand: 'Renault', model: 'Stepway', color: 'Rojo', transmission: 'CVT', plate: 'AP260HB', vin: '605969', location: 'Volgan', km: '', client: '', notes: 'Renault Chacao (13/11)' },
+
+            // CATEGORÍA: Nuevos Volkswagen (5 vehículos)
+            { id: 'v-15', category: 'Nuevos Volkswagen', brand: 'Volkswagen', model: 'Tera', color: 'Blanco', transmission: 'MT', plate: 'AO200YB', vin: '9BWBL6DF5TT420895', location: 'San Ignacio', km: '', client: '', notes: 'Ref: 13/11' },
+            { id: 'v-16', category: 'Nuevos Volkswagen', brand: 'Volkswagen', model: 'T-Cross', color: 'Plata', transmission: 'CVT', plate: 'AP248BB', vin: '1333', location: 'Volgan', km: '', client: '', notes: 'Ref: 13/11' },
+            { id: 'v-17', category: 'Nuevos Volkswagen', brand: 'Volkswagen', model: 'Tera', color: 'Plata Lunar', transmission: 'MT', plate: 'AP250BB', vin: '7205', location: 'Volgan', km: '', client: '', notes: 'Ref: 13/11' },
+            { id: 'v-18', category: 'Nuevos Volkswagen', brand: 'Volkswagen', model: 'Virtus', color: 'Plata', transmission: 'MT', plate: 'AO193YB', vin: '4070', location: 'Volgan', km: '', client: '', notes: 'Ref: 13/11' },
+            { id: 'v-19', category: 'Nuevos Volkswagen', brand: 'Volkswagen', model: 'T-Cross', color: 'Plata', transmission: 'CVT', plate: 'AP251BB', vin: '2126', location: 'Sin especificar', km: '', client: '', notes: 'Ref: 13/11' },
+
+            // CATEGORÍA: Usados (13 vehículos)
+            { id: 'v-20', category: 'Usados', brand: 'Renault', model: 'Logan', color: 'Gris Estrella', transmission: 'MT', plate: 'AO101TB', vin: '9FB4SROE3TM413591', location: 'XiRO', km: '', client: 'Max', notes: '' },
+            { id: 'v-21', category: 'Usados', brand: 'Volkswagen', model: 'T-Cross (Demo)', color: 'Gris Cassiope', transmission: 'N/A', plate: 'AO629EB', vin: '9BWBL6BFOT4082674', location: 'Demo', km: '', client: '', notes: 'Unidad Demo' },
+            { id: 'v-22', category: 'Usados', brand: 'Renault', model: 'Logan', color: 'Rojo', transmission: 'MT', plate: 'AO069LB', vin: '9FB4SROE7TM500216', location: 'Préstamo', km: '', client: 'Asignado: préstamo', notes: '' },
+            { id: 'v-23', category: 'Usados', brand: 'Renault', model: 'Stepway', color: 'Gris Estrella', transmission: 'MT', plate: 'AO076TB', vin: '9FB5SR0E4TM392545', location: 'Latonería', km: '9533', client: '', notes: '' },
+            { id: 'v-24', category: 'Usados', brand: 'Volkswagen', model: 'Virtus', color: 'Gris Plata', transmission: 'N/A', plate: 'AO191YB', vin: '9BWDL6BZ0T4033932', location: 'San Ignacio', km: '', client: '', notes: '' },
+            { id: 'v-25', category: 'Usados', brand: 'Renault', model: 'Logan', color: 'Gris', transmission: 'MT', plate: 'AO081PB', vin: '9FB4SROE3TM469630', location: 'Asignado', km: '', client: 'Brayan Vielma', notes: '' },
+            { id: 'v-26', category: 'Usados', brand: 'Renault', model: 'Duster', color: 'Sin especificar', transmission: 'MT', plate: 'AO755CA', vin: '1429', location: 'En casa 27/21', km: '19640', client: '', notes: '' },
+            { id: 'v-27', category: 'Usados', brand: 'Renault', model: 'Logan', color: 'Rojo', transmission: 'CVT', plate: 'Sin placa', vin: 'Sin VIN', location: 'XiRO', km: '44500', client: 'Mónica', notes: '' },
+            { id: 'v-28', category: 'Usados', brand: 'Renault', model: 'Logan', color: 'Gris Cassiope', transmission: 'CVT', plate: 'AH672UD', vin: '9FB4SR4OXSM248655', location: 'XiRO', km: '18255', client: 'Marcos Pérez', notes: '' },
+            { id: 'v-29', category: 'Usados', brand: 'Renault', model: 'Logan', color: 'Negro', transmission: 'MT', plate: 'AO760CA', vin: '9FB4SROE2TM500205', location: 'Sin especificar', km: '', client: 'Nelsy Verde', notes: '' },
+            { id: 'v-30', category: 'Usados', brand: 'Renault', model: 'Kwid', color: 'Gris Estrella', transmission: 'MT', plate: 'AO760XB', vin: '9FBRBB002TM557067', location: 'Sin especificar', km: '2700', client: 'Romaryelit Santos', notes: '' },
+            { id: 'v-31', category: 'Usados', brand: 'Renault', model: 'Logan (Prototipo Patrulla)', color: 'Blanco', transmission: 'MT', plate: 'AO803TB', vin: 'Sin VIN', location: 'Prototipo Patrulla', km: '', client: '', notes: 'Prototipo patrulla' },
+            { id: 'v-32', category: 'Usados', brand: 'Volkswagen', model: 'Virtus', color: 'Gris', transmission: 'MT', plate: 'AO033WA', vin: 'Sin VIN', location: 'Kalinago', km: '', client: '', notes: '' },
+
+            // CATEGORÍA: Consignados (7 vehículos)
+            { id: 'v-33', category: 'Consignados', brand: 'Renault', model: 'Stepway', color: 'Blanco', transmission: 'MT', plate: 'AO100LB', vin: '9FB5SR0E6TM441440', location: 'Papelillo', km: '', client: '', notes: '' },
+            { id: 'v-34', category: 'Consignados', brand: 'Renault', model: 'Stepway', color: 'Gris Estrella', transmission: 'MT', plate: 'AO104LB', vin: '9FB5SR0E8TM413607', location: 'Papelillo', km: '', client: '', notes: '' },
+            { id: 'v-35', category: 'Consignados', brand: 'Renault', model: 'Stepway', color: 'Gris Cassiope', transmission: 'CVT', plate: 'AO093LB', vin: '9FB5SR4D0TM469624', location: 'Papelillo', km: '', client: '', notes: '' },
+            { id: 'v-36', category: 'Consignados', brand: 'Renault', model: 'Logan', color: 'Gris Estrella', transmission: 'CVT', plate: 'AO094LB', vin: '9FB4SR4D3TM441487', location: 'Papelillo', km: '', client: '', notes: '' },
+            { id: 'v-37', category: 'Consignados', brand: 'Renault', model: 'Logan', color: 'Negro', transmission: 'CVT', plate: 'AO095LB', vin: '9FB4SR4D1TM441486', location: 'Papelillo', km: '', client: '', notes: '' },
+            { id: 'v-38', category: 'Consignados', brand: 'Renault', model: 'Stepway', color: 'Rojo', transmission: 'CVT', plate: 'AP261HB', vin: '9FB5SR4D4TM605964', location: 'Planta', km: '', client: '', notes: '' },
+            { id: 'v-39', category: 'Consignados', brand: 'Renault', model: 'Logan', color: 'Beis', transmission: 'MT', plate: 'AO584DB', vin: '9FB4SR0E7TM518912', location: 'Planta', km: '', client: '', notes: '' }
+        ];
+
+        // State
+        let inventory = [];
+        let charts = {};
+        let sortState = { field: null, asc: true };
+        let tableDensity = 'normal';
+
+        // ==========================================
+        // 2. INITIALIZATION & AUTO-SAVE STORAGE
+        // ==========================================
+        function loadInventory() {
+            const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('vehicle_inventory_13_11_v1');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    inventory = Array.isArray(parsed) && parsed.length > 0 ? parsed : [...INITIAL_INVENTORY];
+                } catch (e) {
+                    console.error('Error parsing localStorage:', e);
+                    inventory = [...INITIAL_INVENTORY];
+                    saveInventory();
+                }
+            } else {
+                inventory = [...INITIAL_INVENTORY];
+                saveInventory();
+            }
+        }
+
+        function saveInventory() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(inventory));
+            const now = new Date().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            localStorage.setItem(STORAGE_KEY + '_last_saved', now);
+            updateAutoSaveBadge(now);
+        }
+
+        function updateAutoSaveBadge(timeStr) {
+            const badge = document.getElementById('autosave-status');
+            if (badge && timeStr) {
+                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Guardado ${timeStr}`;
+            }
+        }
+
+        // ==========================================
+        // 3. UI HELPERS (DROPDOWNS, DENSITY, CHARTS)
+        // ==========================================
+        function toggleExportMenu() {
+            document.getElementById('export-menu').classList.toggle('hidden');
+        }
+
+        function closeExportMenu() {
+            document.getElementById('export-menu').classList.add('hidden');
+        }
+
+        window.addEventListener('click', function(e) {
+            const wrapper = document.getElementById('export-dropdown-wrapper');
+            if (wrapper && !wrapper.contains(e.target)) {
+                closeExportMenu();
+            }
+        });
+
+        function toggleChartsVisibility() {
+            const grid = document.getElementById('charts-grid');
+            const text = document.getElementById('toggle-charts-text');
+            const icon = document.getElementById('toggle-charts-icon');
+            const isHidden = grid.classList.toggle('hidden');
+            text.textContent = isHidden ? 'Mostrar gráficos' : 'Ocultar gráficos';
+            icon.setAttribute('data-lucide', isHidden ? 'chevron-down' : 'chevron-up');
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function setTableDensity(mode) {
+            tableDensity = mode;
+            const btnNormal = document.getElementById('density-normal');
+            const btnCompact = document.getElementById('density-compact');
+            if (mode === 'compact') {
+                btnCompact.className = 'px-2.5 py-1 rounded-md font-medium bg-white text-slate-800 shadow-2xs transition-all';
+                btnNormal.className = 'px-2.5 py-1 rounded-md font-medium text-slate-500 hover:text-slate-800 transition-all';
+            } else {
+                btnNormal.className = 'px-2.5 py-1 rounded-md font-medium bg-white text-slate-800 shadow-2xs transition-all';
+                btnCompact.className = 'px-2.5 py-1 rounded-md font-medium text-slate-500 hover:text-slate-800 transition-all';
+            }
+            renderTable();
+        }
+
+        function copyText(text, label) {
+            if (!text || text === 'Sin placa' || text === 'Sin VIN') return;
+            navigator.clipboard.writeText(text).then(() => {
+                showToast(`${label} copiado: ${text}`);
+            }).catch(() => {
+                showToast(`No se pudo copiar ${label}`);
+            });
+        }
+
+        // ==========================================
+        // 4. COLOR & BADGE HELPERS
+        // ==========================================
+        function getCategoryBadge(category) {
+            switch (category) {
+                case 'Nuevos Renault':
+                    return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">Nuevos Renault</span>`;
+                case 'Nuevos Volkswagen':
+                    return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">Nuevos VW</span>`;
+                case 'Usados':
+                    return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-200">Usados</span>`;
+                case 'Consignados':
+                    return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">Consignados</span>`;
+                case 'Por Facturar':
+                    return `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>Por Facturar</span>`;
+                default:
+                    return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200">${escapeHtml(category)}</span>`;
+            }
+        }
+
+        function getBrandPill(brand) {
+            const b = (brand || '').toLowerCase();
+            if (b.includes('renault')) {
+                return `<span class="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-200/80">Renault</span>`;
+            }
+            if (b.includes('volkswagen') || b === 'vw') {
+                return `<span class="inline-block px-1.5 py-0.2 rounded text-[10px] font-bold uppercase tracking-wider bg-sky-50 text-sky-800 border border-sky-200/80">Volkswagen</span>`;
+            }
+            return `<span class="text-xs text-slate-500">${escapeHtml(brand)}</span>`;
+        }
+
+        function getColorDot(colorName) {
+            if (!colorName || colorName.toLowerCase() === 'sin especificar') {
+                return `<span class="w-3 h-3 rounded-full border border-dashed border-slate-400 bg-transparent inline-block shrink-0"></span>`;
+            }
+            const c = colorName.toLowerCase();
+            let bg = '#94a3b8';
+            let border = 'border-slate-300';
+
+            if (c.includes('blanco') || c.includes('blanca')) {
+                bg = '#ffffff';
+                border = 'border-slate-400';
+            } else if (c.includes('negro')) {
+                bg = '#1e293b';
+                border = 'border-slate-900';
+            } else if (c.includes('rojo')) {
+                bg = '#dc2626';
+                border = 'border-red-700';
+            } else if (c.includes('cassiope')) {
+                bg = '#52525b';
+                border = 'border-zinc-700';
+            } else if (c.includes('estrella')) {
+                bg = '#9ca3af';
+                border = 'border-gray-500';
+            } else if (c.includes('topacio')) {
+                bg = '#78716c';
+                border = 'border-stone-600';
+            } else if (c.includes('plata')) {
+                bg = '#d1d5db';
+                border = 'border-gray-400';
+            } else if (c.includes('gris')) {
+                bg = '#64748b';
+                border = 'border-slate-600';
+            } else if (c.includes('beis') || c.includes('beige')) {
+                bg = '#d6c7b2';
+                border = 'border-stone-400';
+            } else if (c.includes('azul')) {
+                bg = '#2563eb';
+                border = 'border-blue-700';
+            }
+
+            return `<span class="w-3 h-3 rounded-full border ${border} inline-block shrink-0 shadow-2xs" style="background-color: ${bg};"></span>`;
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function getBaseModelName(model) {
+            if (!model) return 'Otro';
+            const clean = model.split('(')[0].trim();
+            return clean.charAt(0).toUpperCase() + clean.slice(1);
+        }
+
+        // ==========================================
+        // 5. KPI INTERACTIVE FILTERS & UPDATES
+        // ==========================================
+        function toggleKpiFilter(category) {
+            const select = document.getElementById('filter-category');
+            if (select.value === category && category !== '') {
+                select.value = '';
+            } else {
+                select.value = category;
+            }
+            updateKpiActiveStyles();
+            renderTable();
+        }
+
+        function toggleTransFilter(trans) {
+            const select = document.getElementById('filter-transmission');
+            select.value = select.value === trans ? '' : trans;
+            renderTable();
+        }
+
+        function updateKpiActiveStyles() {
+            const currentCat = document.getElementById('filter-category').value;
+            const indicator = document.getElementById('active-kpi-indicator');
+
+            document.querySelectorAll('.kpi-card').forEach(card => {
+                card.classList.remove('ring-2', 'ring-slate-900', 'ring-offset-1', 'bg-slate-50');
+            });
+
+            if (currentCat) {
+                const activeCard = document.getElementById('kpi-card-' + currentCat);
+                if (activeCard) {
+                    activeCard.classList.add('ring-2', 'ring-slate-900', 'ring-offset-1');
+                }
+                indicator.textContent = `Filtrando: ${currentCat}`;
+                indicator.classList.remove('hidden');
+            } else {
+                const allCard = document.getElementById('kpi-card-ALL');
+                if (allCard) allCard.classList.add('ring-2', 'ring-slate-300');
+                indicator.classList.add('hidden');
+            }
+        }
+
+        function updateKPIs() {
+            const total = inventory.length;
+            const renault = inventory.filter(v => v.category === 'Nuevos Renault').length;
+            const vw = inventory.filter(v => v.category === 'Nuevos Volkswagen').length;
+            const usados = inventory.filter(v => v.category === 'Usados').length;
+            const consignados = inventory.filter(v => v.category === 'Consignados').length;
+            const facturar = inventory.filter(v => v.category === 'Por Facturar').length;
+
+            const mt = inventory.filter(v => v.transmission === 'MT').length;
+            const cvt = inventory.filter(v => v.transmission === 'CVT').length;
+            const na = inventory.filter(v => v.transmission !== 'MT' && v.transmission !== 'CVT').length;
+
+            document.getElementById('kpi-total').textContent = total;
+            document.getElementById('kpi-renault').textContent = renault;
+            document.getElementById('kpi-vw').textContent = vw;
+            document.getElementById('kpi-usados').textContent = usados;
+            document.getElementById('kpi-consignados').textContent = consignados;
+            document.getElementById('kpi-facturar').textContent = facturar;
+
+            const pct = (val) => total > 0 ? Math.round((val / total) * 100) + '% del total' : '0% del total';
+            document.getElementById('kpi-renault-pct').textContent = pct(renault);
+            document.getElementById('kpi-vw-pct').textContent = pct(vw);
+            document.getElementById('kpi-usados-pct').textContent = pct(usados);
+            document.getElementById('kpi-consignados-pct').textContent = pct(consignados);
+            document.getElementById('kpi-facturar-pct').textContent = pct(facturar);
+
+            document.getElementById('kpi-mt').textContent = mt;
+            document.getElementById('kpi-cvt').textContent = cvt;
+            document.getElementById('kpi-na').textContent = `${na} sin especificar`;
+        }
+
+        function getAllKnownLocations() {
+            const fromData = inventory.map(v => v.location && v.location.trim() !== '' ? v.location.trim() : 'Sin especificar');
+            return [...new Set([...STANDARD_LOCATIONS, ...fromData])].sort();
+        }
+
+        function updateLocationFilterOptions() {
+            const select = document.getElementById('filter-location');
+            const currentVal = select.value;
+            const locations = [...new Set(inventory.map(v => v.location || 'Sin especificar'))].sort();
+
+            select.innerHTML = '<option value="">Todas las Ubicaciones</option>';
+            locations.forEach(loc => {
+                const opt = document.createElement('option');
+                opt.value = loc;
+                opt.textContent = loc;
+                select.appendChild(opt);
+            });
+
+            if (locations.includes(currentVal)) {
+                select.value = currentVal;
+            }
+        }
+
+        // ==========================================
+        // 6. CHARTS RENDERING (Chart.js + DataLabels)
+        // ==========================================
+        function updateCharts() {
+            if (typeof Chart === 'undefined') return;
+            if (typeof ChartDataLabels !== 'undefined') {
+                Chart.register(ChartDataLabels);
+            }
+
+            const catLabels = ['Nuevos Renault', 'Nuevos Volkswagen', 'Usados', 'Consignados', 'Por Facturar'];
+            const catCounts = catLabels.map(cat => inventory.filter(v => v.category === cat).length);
+            const catColors = ['#f59e0b', '#3b82f6', '#a855f7', '#10b981', '#f43f5e'];
+
+            if (charts.category) {
+                charts.category.data.datasets[0].data = catCounts;
+                charts.category.update();
+            } else {
+                const ctxCat = document.getElementById('categoryChart').getContext('2d');
+                charts.category = new Chart(ctxCat, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Nuevos RNLT', 'Nuevos VW', 'Usados', 'Consignados', 'Por Facturar'],
+                        datasets: [{
+                            data: catCounts,
+                            backgroundColor: catColors,
+                            borderWidth: 2,
+                            borderColor: '#ffffff',
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '62%',
+                        plugins: {
+                            datalabels: {
+                                color: '#ffffff',
+                                font: { weight: 'bold', size: 11, family: 'Inter' },
+                                formatter: (val) => val > 0 ? val : ''
+                            },
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    usePointStyle: true,
+                                    boxWidth: 8,
+                                    font: { family: 'Inter', size: 11 }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            const modelMap = {};
+            inventory.forEach(v => {
+                const m = getBaseModelName(v.model);
+                modelMap[m] = (modelMap[m] || 0) + 1;
+            });
+            const sortedModels = Object.entries(modelMap).sort((a, b) => b[1] - a[1]);
+            const modelLabels = sortedModels.map(item => item[0]);
+            const modelCounts = sortedModels.map(item => item[1]);
+
+            if (charts.model) {
+                charts.model.data.labels = modelLabels;
+                charts.model.data.datasets[0].data = modelCounts;
+                charts.model.update();
+            } else {
+                const ctxModel = document.getElementById('modelChart').getContext('2d');
+                charts.model = new Chart(ctxModel, {
+                    type: 'bar',
+                    data: {
+                        labels: modelLabels,
+                        datasets: [{
+                            label: 'Unidades',
+                            data: modelCounts,
+                            backgroundColor: '#1e293b',
+                            borderRadius: 6,
+                            barThickness: 18
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: { padding: { top: 18 } },
+                        plugins: {
+                            legend: { display: false },
+                            datalabels: {
+                                anchor: 'end',
+                                align: 'top',
+                                color: '#334155',
+                                font: { weight: 'bold', size: 10, family: 'Inter' },
+                                formatter: (val) => val
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { stepSize: 2, font: { family: 'Inter', size: 10 } },
+                                grid: { color: '#f1f5f9' }
+                            },
+                            x: {
+                                ticks: { font: { family: 'Inter', size: 10 }, maxRotation: 45, minRotation: 0 },
+                                grid: { display: false }
+                            }
+                        }
+                    }
+                });
+            }
+
+            const locMap = {};
+            inventory.forEach(v => {
+                const loc = v.location && v.location.trim() !== '' ? v.location.trim() : 'Sin especificar';
+                locMap[loc] = (locMap[loc] || 0) + 1;
+            });
+            const sortedLocs = Object.entries(locMap).sort((a, b) => b[1] - a[1]);
+            const locLabels = sortedLocs.map(item => item[0]);
+            const locCounts = sortedLocs.map(item => item[1]);
+
+            if (charts.location) {
+                charts.location.data.labels = locLabels;
+                charts.location.data.datasets[0].data = locCounts;
+                charts.location.update();
+            } else {
+                const ctxLoc = document.getElementById('locationChart').getContext('2d');
+                charts.location = new Chart(ctxLoc, {
+                    type: 'bar',
+                    data: {
+                        labels: locLabels,
+                        datasets: [{
+                            label: 'Unidades',
+                            data: locCounts,
+                            backgroundColor: '#0284c7',
+                            borderRadius: 6,
+                            barThickness: 13
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: { padding: { right: 24 } },
+                        plugins: {
+                            legend: { display: false },
+                            datalabels: {
+                                anchor: 'end',
+                                align: 'right',
+                                color: '#0369a1',
+                                font: { weight: 'bold', size: 10, family: 'Inter' },
+                                formatter: (val) => val
+                            }
+                        },
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                ticks: { stepSize: 2, font: { family: 'Inter', size: 10 } },
+                                grid: { color: '#f1f5f9' }
+                            },
+                            y: {
+                                ticks: { font: { family: 'Inter', size: 10 } },
+                                grid: { display: false }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // ==========================================
+        // 7. SORTING, FILTERING & INLINE LOCATION EDIT
+        // ==========================================
+        function sortBy(field) {
+            if (sortState.field === field) {
+                sortState.asc = !sortState.asc;
+            } else {
+                sortState.field = field;
+                sortState.asc = true;
+            }
+            ['category', 'model', 'color', 'transmission', 'plate', 'location'].forEach(f => {
+                const el = document.getElementById('sort-icon-' + f);
+                if (el) el.textContent = f === field ? (sortState.asc ? '↑' : '↓') : '↕';
+            });
+            renderTable();
+        }
+
+        function updateLocationInline(id, newLocation) {
+            const index = inventory.findIndex(v => v.id === id);
+            if (index === -1) return;
+            const vehicle = inventory[index];
+            vehicle.location = newLocation;
+            saveInventory();
+            updateLocationFilterOptions();
+            updateCharts();
+            renderTable();
+            showToast(`${vehicle.model} (${vehicle.plate}) movido a "${newLocation}"`);
+        }
+
+        function getFilteredInventory() {
+            const search = document.getElementById('search-input').value.toLowerCase().trim();
+            const catFilter = document.getElementById('filter-category').value;
+            const brandFilter = document.getElementById('filter-brand').value;
+            const transFilter = document.getElementById('filter-transmission').value;
+            const locFilter = document.getElementById('filter-location').value;
+
+            updateKpiActiveStyles();
+
+            const hasActiveFilters = search || catFilter || brandFilter || transFilter || locFilter;
+            const clearBtn = document.getElementById('clear-filters-btn');
+            if (hasActiveFilters) {
+                clearBtn.classList.remove('hidden');
+                clearBtn.classList.add('inline-flex');
+            } else {
+                clearBtn.classList.add('hidden');
+                clearBtn.classList.remove('inline-flex');
+            }
+
+            let list = inventory.filter(v => {
+                if (catFilter && v.category !== catFilter) return false;
+                if (brandFilter && v.brand.toLowerCase() !== brandFilter.toLowerCase()) return false;
+                if (transFilter && v.transmission !== transFilter) return false;
+                if (locFilter && (v.location || 'Sin especificar') !== locFilter) return false;
+
+                if (search) {
+                    const haystack = [
+                        v.brand, v.model, v.color, v.plate, v.vin, v.location, v.client, v.notes, v.category
+                    ].join(' ').toLowerCase();
+                    if (!haystack.includes(search)) return false;
+                }
+                return true;
+            });
+
+            if (sortState.field) {
+                list = [...list].sort((a, b) => {
+                    const valA = (a[sortState.field] || '').toString().toLowerCase();
+                    const valB = (b[sortState.field] || '').toString().toLowerCase();
+                    return sortState.asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                });
+            }
+
+            return list;
+        }
+
+        function renderTable() {
+            const filtered = getFilteredInventory();
+            const tbody = document.getElementById('inventory-tbody');
+            const emptyState = document.getElementById('empty-state');
+            const allLocations = getAllKnownLocations();
+
+            document.getElementById('showing-count').textContent = filtered.length;
+            document.getElementById('total-count').textContent = inventory.length;
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            const cellPad = tableDensity === 'compact' ? 'py-2 px-3' : 'py-3.5 px-4';
+
+            tbody.innerHTML = filtered.map(v => {
+                const colorText = v.color && v.color.trim() !== '' ? v.color : 'Sin especificar';
+                const isMissingColor = colorText.toLowerCase() === 'sin especificar';
+
+                const plateText = v.plate && v.plate.trim() !== '' ? v.plate : 'Sin placa';
+                const isMissingPlate = plateText.toLowerCase() === 'sin placa';
+
+                const vinText = v.vin && v.vin.trim() !== '' ? v.vin : 'Sin VIN';
+                const isMissingVin = vinText.toLowerCase() === 'sin vin';
+
+                const locText = v.location && v.location.trim() !== '' ? v.location : 'Sin especificar';
+                const isMissingLoc = locText.toLowerCase() === 'sin especificar';
+
+                // Transmission badge
+                let transBadge = `<span class="px-2 py-0.5 text-xs font-medium rounded-md bg-slate-100 text-slate-500 border border-dashed border-slate-300">N/A</span>`;
+                if (v.transmission === 'MT') {
+                    transBadge = `<span class="px-2 py-0.5 text-xs font-semibold rounded-md bg-slate-800 text-white">MT</span>`;
+                } else if (v.transmission === 'CVT') {
+                    transBadge = `<span class="px-2 py-0.5 text-xs font-semibold rounded-md bg-sky-100 text-sky-800 border border-sky-200">CVT</span>`;
+                }
+
+                // Inline location select options
+                const locOptionsHtml = allLocations.map(loc => 
+                    `<option value="${escapeHtml(loc)}" ${loc === locText ? 'selected' : ''}>${escapeHtml(loc)}</option>`
+                ).join('');
+
+                // Details column (Km + Client + Notes)
+                let detailsHtml = [];
+                if (v.km && v.km.toString().trim() !== '') {
+                    const formattedKm = Number(v.km) ? Number(v.km).toLocaleString('es-VE') + ' km' : escapeHtml(v.km) + ' km';
+                    detailsHtml.push(`<span class="inline-flex items-center gap-1 text-xs font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md"><i data-lucide="gauge" class="w-3 h-3 text-slate-500"></i>${formattedKm}</span>`);
+                }
+                if (v.client && v.client.trim() !== '') {
+                    detailsHtml.push(`<div class="text-xs font-medium text-slate-800 flex items-center gap-1 mt-0.5"><i data-lucide="user" class="w-3 h-3 text-slate-400"></i>${escapeHtml(v.client)}</div>`);
+                }
+                if (v.notes && v.notes.trim() !== '' && v.notes !== 'Renault Chacao (13/11)' && v.notes !== 'Ref: 13/11') {
+                    detailsHtml.push(`<div class="text-[11px] text-slate-500 italic mt-0.5">${escapeHtml(v.notes)}</div>`);
+                }
+                if (detailsHtml.length === 0) {
+                    detailsHtml.push(`<span class="text-xs text-slate-300">—</span>`);
+                }
+
+                return `
+                    <tr class="hover:bg-slate-50/90 transition-colors group">
+                        <td class="${cellPad} whitespace-nowrap">
+                            ${getCategoryBadge(v.category)}
+                        </td>
+                        <td class="${cellPad}">
+                            <div class="font-bold text-slate-900 leading-tight">${escapeHtml(v.model)}</div>
+                            <div class="mt-0.5">${getBrandPill(v.brand)}</div>
+                        </td>
+                        <td class="${cellPad} whitespace-nowrap">
+                            <div class="flex items-center gap-2">
+                                ${getColorDot(colorText)}
+                                <span class="text-xs ${isMissingColor ? 'text-slate-400 italic' : 'font-medium text-slate-700'}">${escapeHtml(colorText)}</span>
+                            </div>
+                        </td>
+                        <td class="${cellPad} whitespace-nowrap">
+                            ${transBadge}
+                        </td>
+                        <td class="${cellPad} whitespace-nowrap">
+                            <div class="flex items-center gap-1.5">
+                                ${isMissingPlate
+                                    ? `<span class="text-[11px] font-medium text-amber-700 bg-amber-50 border border-dashed border-amber-300 px-2 py-0.5 rounded">Sin placa</span>`
+                                    : `<button type="button" onclick="copyText('${escapeHtml(plateText)}', 'Placa')" title="Clic para copiar placa" class="font-mono text-xs font-bold text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded border border-slate-200 inline-flex items-center gap-1 transition-colors cursor-pointer">
+                                        ${escapeHtml(plateText)}
+                                        <i data-lucide="copy" class="w-2.5 h-2.5 text-slate-400 opacity-0 group-hover:opacity-100"></i>
+                                       </button>`
+                                }
+                            </div>
+                            <div class="mt-1 flex items-center gap-1">
+                                ${isMissingVin
+                                    ? `<span class="text-[11px] text-slate-400 italic">Sin VIN</span>`
+                                    : `<button type="button" onclick="copyText('${escapeHtml(vinText)}', 'VIN')" title="Clic para copiar VIN" class="font-mono text-[11px] text-slate-500 hover:text-slate-900 inline-flex items-center gap-1 cursor-pointer">
+                                        VIN: ${escapeHtml(vinText)}
+                                        <i data-lucide="copy" class="w-2.5 h-2.5 text-slate-400 opacity-0 group-hover:opacity-100"></i>
+                                       </button>`
+                                }
+                            </div>
+                        </td>
+                        <td class="${cellPad} whitespace-nowrap">
+                            <div class="relative inline-flex items-center">
+                                <i data-lucide="map-pin" class="w-3.5 h-3.5 ${isMissingLoc ? 'text-amber-500' : 'text-slate-400'} absolute left-2 pointer-events-none"></i>
+                                <select onchange="updateLocationInline('${v.id}', this.value)" aria-label="Cambiar ubicación"
+                                        class="pl-7 pr-6 py-1 text-xs font-medium rounded-lg border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-900/10 ${isMissingLoc ? 'bg-amber-50/70 border-dashed border-amber-300 text-amber-800' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'}">
+                                    ${locOptionsHtml}
+                                </select>
+                            </div>
+                        </td>
+                        <td class="${cellPad}">
+                            ${detailsHtml.join('')}
+                        </td>
+                        <td class="${cellPad} whitespace-nowrap text-right">
+                            <div class="inline-flex items-center gap-1">
+                                ${v.category !== 'Por Facturar' ? `
+                                <button onclick="markAsToInvoice('${v.id}')" class="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Mover a Por Facturar">
+                                    <i data-lucide="receipt" class="w-4 h-4"></i>
+                                </button>` : ''}
+                                <button onclick="openVehicleModal('${v.id}')" class="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar detalles completos">
+                                    <i data-lucide="pencil" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="confirmDeleteVehicle('${v.id}')" class="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar vehículo">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function markAsToInvoice(id) {
+            const index = inventory.findIndex(v => v.id === id);
+            if (index === -1) return;
+            const vehicle = inventory[index];
+            inventory[index].category = 'Por Facturar';
+            saveInventory();
+            refreshDashboard();
+            showToast(`${vehicle.brand} ${vehicle.model} (${vehicle.plate}) movido a Por Facturar`);
+        }
+
+        function refreshDashboard() {
+            updateKPIs();
+            updateLocationFilterOptions();
+            updateCharts();
+            renderTable();
+        }
+
+        // ==========================================
+        // 8. CRUD OPERATIONS & MODALS
+        // ==========================================
+        function openVehicleModal(id = null) {
+            const modal = document.getElementById('vehicle-modal');
+            const title = document.getElementById('modal-title');
+            const form = document.getElementById('vehicle-form');
+            form.reset();
+
+            if (id) {
+                const vehicle = inventory.find(v => v.id === id);
+                if (!vehicle) return;
+                title.textContent = 'Editar Vehículo';
+                document.getElementById('vehicle-id').value = vehicle.id;
+                document.getElementById('form-category').value = vehicle.category;
+                document.getElementById('form-brand').value = vehicle.brand;
+                document.getElementById('form-model').value = vehicle.model;
+                document.getElementById('form-color').value = vehicle.color === 'Sin especificar' ? '' : vehicle.color;
+                document.getElementById('form-transmission').value = vehicle.transmission || 'N/A';
+                document.getElementById('form-location').value = vehicle.location === 'Sin especificar' ? '' : vehicle.location;
+                document.getElementById('form-plate').value = vehicle.plate === 'Sin placa' ? '' : vehicle.plate;
+                document.getElementById('form-vin').value = vehicle.vin === 'Sin VIN' ? '' : vehicle.vin;
+                document.getElementById('form-km').value = vehicle.km || '';
+                document.getElementById('form-client').value = vehicle.client || '';
+                document.getElementById('form-notes').value = vehicle.notes || '';
+            } else {
+                title.textContent = 'Agregar Nuevo Vehículo';
+                document.getElementById('vehicle-id').value = '';
+                document.getElementById('form-brand').value = 'Renault';
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeVehicleModal() {
+            document.getElementById('vehicle-modal').classList.add('hidden');
+        }
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('vehicle-id').value;
+
+            const vehicleData = {
+                id: id || 'v-' + Date.now(),
+                category: document.getElementById('form-category').value,
+                brand: document.getElementById('form-brand').value.trim(),
+                model: document.getElementById('form-model').value.trim(),
+                color: document.getElementById('form-color').value.trim() || 'Sin especificar',
+                transmission: document.getElementById('form-transmission').value,
+                location: document.getElementById('form-location').value.trim() || 'Sin especificar',
+                plate: document.getElementById('form-plate').value.trim().toUpperCase() || 'Sin placa',
+                vin: document.getElementById('form-vin').value.trim().toUpperCase() || 'Sin VIN',
+                km: document.getElementById('form-km').value.trim(),
+                client: document.getElementById('form-client').value.trim(),
+                notes: document.getElementById('form-notes').value.trim()
+            };
+
+            if (id) {
+                const index = inventory.findIndex(v => v.id === id);
+                if (index !== -1) {
+                    inventory[index] = vehicleData;
+                    showToast('Vehículo actualizado y guardado');
+                }
+            } else {
+                inventory.unshift(vehicleData);
+                showToast('Vehículo agregado y guardado');
+            }
+
+            saveInventory();
+            closeVehicleModal();
+            refreshDashboard();
+        }
+
+        function confirmDeleteVehicle(id) {
+            const vehicle = inventory.find(v => v.id === id);
+            if (!vehicle) return;
+
+            const modal = document.getElementById('confirm-modal');
+            document.getElementById('confirm-title').textContent = 'Eliminar vehículo';
+            document.getElementById('confirm-message').textContent = `¿Estás seguro de eliminar el ${vehicle.brand} ${vehicle.model} (${vehicle.plate}) del inventario?`;
+            
+            const iconBg = document.getElementById('confirm-icon-bg');
+            iconBg.className = 'p-3 rounded-full bg-red-100 text-red-600 shrink-0';
+            
+            const btn = document.getElementById('confirm-action-btn');
+            btn.className = 'px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-xl hover:bg-red-700 transition-colors shadow-xs';
+            btn.textContent = 'Eliminar';
+            
+            btn.onclick = () => {
+                inventory = inventory.filter(v => v.id !== id);
+                saveInventory();
+                closeConfirmModal();
+                refreshDashboard();
+                showToast('Vehículo eliminado y cambios guardados');
+            };
+
+            modal.classList.remove('hidden');
+        }
+
+        function openRestoreModal() {
+            const modal = document.getElementById('confirm-modal');
+            document.getElementById('confirm-title').textContent = 'Restaurar inventario (13/11)';
+            document.getElementById('confirm-message').textContent = 'Se reemplazarán los cambios actuales por los 39 vehículos originales del corte 13/11. ¿Deseas continuar?';
+            
+            const iconBg = document.getElementById('confirm-icon-bg');
+            iconBg.className = 'p-3 rounded-full bg-amber-100 text-amber-600 shrink-0';
+            
+            const btn = document.getElementById('confirm-action-btn');
+            btn.className = 'px-4 py-2 text-sm font-semibold text-white bg-slate-900 rounded-xl hover:bg-slate-800 transition-colors shadow-xs';
+            btn.textContent = 'Restaurar datos';
+            
+            btn.onclick = () => {
+                inventory = [...INITIAL_INVENTORY];
+                saveInventory();
+                resetFilters();
+                closeConfirmModal();
+                refreshDashboard();
+                showToast('Inventario restaurado al corte 13/11');
+            };
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirm-modal').classList.add('hidden');
+        }
+
+        // ==========================================
+        // 9. EXPORT (EXCEL, CSV, JSON BACKUP)
+        // ==========================================
+        function resetFilters() {
+            document.getElementById('search-input').value = '';
+            document.getElementById('filter-category').value = '';
+            document.getElementById('filter-brand').value = '';
+            document.getElementById('filter-transmission').value = '';
+            document.getElementById('filter-location').value = '';
+            sortState = { field: null, asc: true };
+            renderTable();
+        }
+
+        function exportToExcel() {
+            if (typeof XLSX === 'undefined') {
+                showToast('Error: No se pudo cargar la librería de Excel');
+                return;
+            }
+
+            const rows = inventory.map((v, index) => ({
+                '#': index + 1,
+                'Categoría': v.category || '',
+                'Marca': v.brand || '',
+                'Modelo': v.model || '',
+                'Color': v.color || '',
+                'Transmisión': v.transmission || '',
+                'Placa': v.plate || '',
+                'VIN / Serial': v.vin || '',
+                'Ubicación / Estado': v.location || '',
+                'Kilometraje': v.km !== '' && !isNaN(Number(v.km)) ? Number(v.km) : (v.km || ''),
+                'Cliente / Asignación': v.client || '',
+                'Notas': v.notes || ''
+            }));
+
+            const wsInventario = XLSX.utils.json_to_sheet(rows);
+            wsInventario['!cols'] = [
+                { wch: 5 }, { wch: 20 }, { wch: 14 }, { wch: 24 },
+                { wch: 16 }, { wch: 13 }, { wch: 13 }, { wch: 22 },
+                { wch: 20 }, { wch: 14 }, { wch: 22 }, { wch: 26 }
+            ];
+
+            const categories = ['Nuevos Renault', 'Nuevos Volkswagen', 'Usados', 'Consignados', 'Por Facturar'];
+            const total = inventory.length;
+            const summaryRows = categories.map(cat => {
+                const count = inventory.filter(v => v.category === cat).length;
+                return {
+                    'Categoría': cat,
+                    'Unidades': count,
+                    'Porcentaje': total > 0 ? ((count / total) * 100).toFixed(1) + '%' : '0%'
+                };
+            });
+            summaryRows.push({ 'Categoría': 'TOTAL FLOTA', 'Unidades': total, 'Porcentaje': '100.0%' });
+
+            const wsResumen = XLSX.utils.json_to_sheet(summaryRows);
+            wsResumen['!cols'] = [{ wch: 22 }, { wch: 12 }, { wch: 14 }];
+
+            const locMap = {};
+            inventory.forEach(v => {
+                const loc = v.location && v.location.trim() !== '' ? v.location.trim() : 'Sin especificar';
+                locMap[loc] = (locMap[loc] || 0) + 1;
+            });
+            const locRows = Object.entries(locMap)
+                .sort((a, b) => b[1] - a[1])
+                .map(([loc, count]) => ({
+                    'Ubicación / Estado': loc,
+                    'Unidades': count
+                }));
+            const wsUbicaciones = XLSX.utils.json_to_sheet(locRows);
+            wsUbicaciones['!cols'] = [{ wch: 24 }, { wch: 12 }];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, wsInventario, 'Inventario Actualizado');
+            XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen Categorías');
+            XLSX.utils.book_append_sheet(wb, wsUbicaciones, 'Por Ubicación');
+
+            const fecha = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(wb, `Inventario_Vehiculos_Actualizado_${fecha}.xlsx`);
+            showToast('Excel (.xlsx) actualizado descargado');
+        }
+
+        function exportToCSV() {
+            const headers = ['Categoría', 'Marca', 'Modelo', 'Color', 'Transmisión', 'Placa', 'VIN', 'Ubicación/Estado', 'Kilometraje', 'Cliente/Asignación', 'Notas'];
+            const rows = inventory.map(v => [
+                v.category, v.brand, v.model, v.color, v.transmission,
+                v.plate, v.vin, v.location, v.km, v.client, v.notes
+            ].map(field => `"${(field || '').toString().replace(/"/g, '""')}"`).join(','));
+
+            const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `Inventario_Vehiculos_13_11_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            showToast('Archivo CSV descargado');
+        }
+
+        function exportBackupJSON() {
+            const dataStr = JSON.stringify(inventory, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Respaldo_Inventario_${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            showToast('Respaldo JSON descargado');
+        }
+
+        function importBackupJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (Array.isArray(imported) && imported.length > 0 && imported[0].model) {
+                        inventory = imported;
+                        saveInventory();
+                        resetFilters();
+                        refreshDashboard();
+                        showToast(`Respaldo cargado (${inventory.length} vehículos)`);
+                    } else {
+                        showToast('El archivo no tiene un formato de inventario válido');
+                    }
+                } catch (err) {
+                    showToast('Error al leer el archivo de respaldo');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        let toastTimeout;
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').textContent = message;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        // Auto-select brand when changing category in modal
+        document.getElementById('form-category').addEventListener('change', function(e) {
+            const brandInput = document.getElementById('form-brand');
+            if (e.target.value === 'Nuevos Renault') brandInput.value = 'Renault';
+            if (e.target.value === 'Nuevos Volkswagen') brandInput.value = 'Volkswagen';
+        });
+
+        // Attach filter event listeners
+        ['search-input', 'filter-category', 'filter-brand', 'filter-transmission', 'filter-location'].forEach(id => {
+            const el = document.getElementById(id);
+            el.addEventListener(id === 'search-input' ? 'input' : 'change', renderTable);
+        });
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadInventory();
+            const lastSaved = localStorage.getItem(STORAGE_KEY + '_last_saved');
+            if (lastSaved) updateAutoSaveBadge(lastSaved);
+            refreshDashboard();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        });
+    </script>
+</body>
+</html>
